@@ -18,6 +18,9 @@ export class Animator {
     public currentFrameIndex: number = 0,
     public elapsedInFrame: number = 0,
     public playing: boolean = false,
-    public playbackSpeed: number = 1
+    public playbackSpeed: number = 1,
+    // Solo relevante para loopMode: "ping-pong". true = avanzando hacia
+    // el último frame, false = retrocediendo hacia el frame 0.
+    public pingPongForward: boolean = true
   ) {}
 }
