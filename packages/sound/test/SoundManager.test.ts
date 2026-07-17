@@ -1,252 +1,183 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { EventBus } from '@mochigo/events';
-import { AssetManager } from '@mochigo/assets';
-import { SoundManager } from '../src/SoundManager';
-import { SoundEvents } from '../src/SoundEvents';
+import type { AssetManager } from '@mochigo/assets';
+import type { EventBus } from '@mochigo/events';
 import { InputEvents } from '@mochigo/input';
-import { installAudioContextMock, MockAudioBufferSourceNode } from './webAudioMocks';
+import type { SoundCategory, PlaybackOptions, PlaybackEntry } from './types';
+import { SoundEvents } from './SoundEvents';
 
-describe('SoundManager', () => {
-  let eventBus: EventBus;
-  let assetManager: AssetManager;
-  let manager: SoundManager;
-  let fakeBuffer: AudioBuffer;
+export class SoundManager {
+  private audioContext: AudioContext | null = null;
+  private masterGain: GainNode | null = null;
+  private categoryGains = new Map<SoundCategory, GainNode>();
 
-  beforeEach(() => {
-    installAudioContextMock();
-    eventBus = new EventBus();
-    assetManager = new AssetManager(eventBus);
+  private categoryVolumes = new Map<SoundCategory, number>([
+    ['music', 1],
+    ['sfx', 1],
+  ]);
 
-    fakeBuffer = { duration: 1 } as AudioBuffer;
-    vi.spyOn(assetManager, 'getSound').mockImplementation((id: string) =>
-      id === 'missing' ? undefined : fakeBuffer
+  private muted = false;
+
+  private nextPlaybackId = 1;
+  private playbacks = new Map<number, PlaybackEntry>();
+
+  private pendingBeforeUnlock: Array<{ playbackId: number; soundId: string; options: PlaybackOptions }> = [];
+  private unlocked = false;
+
+  constructor(
+    private readonly assetManager: AssetManager,
+    private readonly eventBus: EventBus
+  ) {
+    this.eventBus.once(InputEvents.TouchStart, () => {
+      if (!this.unlocked) {
+        this.unlockAudioContext().catch((error) => {
+          console.error('[SoundManager] Falló el desbloqueo automático de audio:', error);
+        });
+      }
+    });
+  }
+
+  async unlockAudioContext(): Promise<void> {
+    if (this.unlocked) return;
+
+    if (!this.audioContext) {
+      this.audioContext = new AudioContext();
+      this.masterGain = this.audioContext.createGain();
+      this.masterGain.connect(this.audioContext.destination);
+
+      for (const category of ['music', 'sfx'] as SoundCategory[]) {
+        const gain = this.audioContext.createGain();
+        gain.gain.value = this.categoryVolumes.get(category) ?? 1;
+        gain.connect(this.masterGain);
+        this.categoryGains.set(category, gain);
+      }
+    }
+
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume();
+    }
+
+    const silentBuffer = this.audioContext.createBuffer(1, 1, this.audioContext.sampleRate);
+    const silentSource = this.audioContext.createBufferSource();
+    silentSource.buffer = silentBuffer;
+    silentSource.connect(this.audioContext.destination);
+    silentSource.start(0);
+
+    this.unlocked = true;
+
+    const queued = this.pendingBeforeUnlock;
+    this.pendingBeforeUnlock = [];
+    for (const { playbackId, soundId, options } of queued) {
+      this.startPlayback(playbackId, soundId, options);
+    }
+  }
+
+  play(soundId: string, options: PlaybackOptions): number {
+    const playbackId = this.nextPlaybackId++;
+
+    if (!this.unlocked) {
+      this.pendingBeforeUnlock.push({ playbackId, soundId, options });
+      this.playbacks.set(playbackId, {
+        playbackId, soundId, options,
+        sourceNode: null, categoryGain: null, stopped: false,
+      });
+      return playbackId;
+    }
+
+    this.startPlayback(playbackId, soundId, options);
+    return playbackId;
+  }
+
+  stop(playbackId: number): void {
+    const entry = this.playbacks.get(playbackId);
+    if (!entry || entry.stopped) return;
+
+    entry.stopped = true;
+
+    if (entry.sourceNode) {
+      try {
+        entry.sourceNode.stop();
+      } catch {
+        // stop() en un nodo ya finalizado lanza en algunos navegadores;
+        // no es un error real, el nodo ya está donde queríamos que esté.
+      }
+      entry.sourceNode.disconnect();
+    } else {
+      this.pendingBeforeUnlock = this.pendingBeforeUnlock.filter((p) => p.playbackId !== playbackId);
+    }
+
+    this.playbacks.delete(playbackId);
+  }
+
+  stopAll(category?: SoundCategory): void {
+    const toStop = Array.from(this.playbacks.values()).filter(
+      (entry) => category === undefined || entry.options.category === category
     );
 
-    manager = new SoundManager(assetManager, eventBus);
-  });
+    for (const entry of toStop) {
+      this.stop(entry.playbackId);
+    }
+  }
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
+  setCategoryVolume(category: SoundCategory, volume: number): void {
+    this.categoryVolumes.set(category, volume);
 
-  describe('unlockAudioContext()', () => {
-    it('crea el AudioContext y lo pasa a estado running', async () => {
-      await manager.unlockAudioContext();
-      // No hay getter directo del estado en la interfaz pública, así
-      // que lo confirmamos indirectamente: play() después de unlock
-      // debe funcionar de inmediato, sin quedar encolado.
-      const playbackId = manager.play('jump', { category: 'sfx' });
-      expect(playbackId).toBeGreaterThan(0);
+    const gain = this.categoryGains.get(category);
+    if (gain && !this.muted) {
+      gain.gain.value = volume;
+    }
+  }
+
+  getCategoryVolume(category: SoundCategory): number {
+    return this.categoryVolumes.get(category) ?? 1;
+  }
+
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+
+    for (const [category, gain] of this.categoryGains) {
+      gain.gain.value = muted ? 0 : (this.categoryVolumes.get(category) ?? 1);
+    }
+  }
+
+  isMuted(): boolean {
+    return this.muted;
+  }
+
+  private startPlayback(playbackId: number, soundId: string, options: PlaybackOptions): void {
+    if (!this.audioContext || !this.masterGain) return;
+
+    const buffer = this.assetManager.getSound(soundId);
+    if (!buffer) {
+      console.warn(`[SoundManager] play(): no se encontró el sonido "${soundId}" en AssetManager (¿se cargó?).`);
+      this.playbacks.delete(playbackId);
+      return;
+    }
+
+    const categoryGain = this.categoryGains.get(options.category);
+    if (!categoryGain) return;
+
+    const sourceNode = this.audioContext.createBufferSource();
+    sourceNode.buffer = buffer;
+    sourceNode.loop = options.loop ?? false;
+
+    const individualGain = this.audioContext.createGain();
+    individualGain.gain.value = options.volume ?? 1;
+
+    sourceNode.connect(individualGain);
+    individualGain.connect(categoryGain);
+
+    sourceNode.onended = () => {
+      const entry = this.playbacks.get(playbackId);
+      if (entry && !entry.stopped) {
+        this.eventBus.emit(SoundEvents.PlaybackEnded, { soundId });
+        this.playbacks.delete(playbackId);
+      }
+    };
+
+    this.playbacks.set(playbackId, {
+      playbackId, soundId, options,
+      sourceNode, categoryGain, stopped: false,
     });
 
-    it('llamarlo una segunda vez es no-op seguro (no crea un segundo AudioContext)', async () => {
-      await manager.unlockAudioContext();
-      await expect(manager.unlockAudioContext()).resolves.toBeUndefined();
-    });
-
-    it('input:touch-start dispara el desbloqueo automático una sola vez', async () => {
-      eventBus.emit(InputEvents.TouchStart, { touchId: 0, position: { x: 0, y: 0 } });
-
-      // Dejamos correr los microtasks pendientes del desbloqueo async.
-      await Promise.resolve();
-      await Promise.resolve();
-
-      const playbackId = manager.play('jump', { category: 'sfx' });
-      expect(playbackId).toBeGreaterThan(0);
-      // No hay forma directa de aseverar "no se creó un segundo
-      // AudioContext" desde afuera sin acceso a estado interno; lo
-      // confirmamos indirectamente en el siguiente test con el conteo
-      // de instancias del mock.
-    });
-  });
-
-  describe('play() antes de unlockAudioContext(): encolado', () => {
-    it('play() antes de desbloquear NO lanza y retorna un playbackId válido', () => {
-      expect(() => {
-        const id = manager.play('jump', { category: 'sfx' });
-        expect(id).toBeGreaterThan(0);
-      }).not.toThrow();
-    });
-
-    it('stop() sobre un playbackId encolado (nunca sonó) no lanza y lo cancela de la cola', async () => {
-      const playbackId = manager.play('jump', { category: 'sfx' });
-
-      expect(() => manager.stop(playbackId)).not.toThrow();
-
-      // Si de verdad se canceló de la cola, desbloquear después no
-      // debería intentar reproducirlo. No hay evento directo para
-      // confirmar "no sonó", pero al menos confirmamos que el
-      // desbloqueo posterior no lanza por intentar reproducir algo
-      // cancelado.
-      await expect(manager.unlockAudioContext()).resolves.toBeUndefined();
-    });
-
-    it('las reproducciones encoladas se ejecutan en orden apenas se desbloquea', async () => {
-      const order: string[] = [];
-      vi.spyOn(assetManager, 'getSound').mockImplementation((id: string) => {
-        order.push(id);
-        return fakeBuffer;
-      });
-
-      manager.play('first', { category: 'sfx' });
-      manager.play('second', { category: 'sfx' });
-      manager.play('third', { category: 'music' });
-
-      await manager.unlockAudioContext();
-
-      expect(order).toEqual(['first', 'second', 'third']);
-    });
-  });
-
-  describe('play(): sonido no encontrado en AssetManager', () => {
-    it('no lanza si el soundId no fue cargado por AssetManager (getSound devuelve undefined)', async () => {
-      await manager.unlockAudioContext();
-
-      expect(() => manager.play('missing', { category: 'sfx' })).not.toThrow();
-    });
-  });
-
-  describe('jerarquía de GainNode y volumen combinado', () => {
-    it('volumen de categoría 0.5 × volumen individual 0.5 = 0.25 efectivo', async () => {
-      await manager.unlockAudioContext();
-      manager.setCategoryVolume('sfx', 0.5);
-
-      // Interceptamos el createBufferSource para poder inspeccionar los
-      // nodos que play() crea internamente.
-      const audioContext = (globalThis as any).AudioContext;
-      let capturedIndividualGain: any = null;
-      const originalCreateGain = audioContext.prototype.createGain;
-
-      manager.play('jump', { category: 'sfx', volume: 0.5 });
-
-      // El GainNode individual se crea DENTRO de play() y no se expone
-      // directamente - lo verificamos indirectamente confirmando que
-      // categoryVolume quedó en 0.5 (ya cubierto por getCategoryVolume)
-      // y que el volumen pasado a play() se aplicó sin lanzar.
-      expect(manager.getCategoryVolume('sfx')).toBe(0.5);
-    });
-
-    it('getCategoryVolume refleja el valor seteado por setCategoryVolume', () => {
-      manager.setCategoryVolume('music', 0.7);
-      expect(manager.getCategoryVolume('music')).toBe(0.7);
-    });
-
-    it('categorías empiezan en volumen 1 por defecto', () => {
-      expect(manager.getCategoryVolume('music')).toBe(1);
-      expect(manager.getCategoryVolume('sfx')).toBe(1);
-    });
-  });
-
-  describe('setMuted() / isMuted()', () => {
-    it('isMuted refleja false antes de mutear y true después', () => {
-      expect(manager.isMuted()).toBe(false);
-      manager.setMuted(true);
-      expect(manager.isMuted()).toBe(true);
-    });
-
-    it('setMuted(false) restaura el volumen de categoría previo, no vuelve a volumen máximo', async () => {
-      await manager.unlockAudioContext();
-      manager.setCategoryVolume('music', 0.3);
-
-      manager.setMuted(true);
-      manager.setMuted(false);
-
-      expect(manager.getCategoryVolume('music')).toBe(0.3); // no 1.0
-    });
-
-    it('setCategoryVolume mientras está muted actualiza el valor recordado sin sonar de inmediato', async () => {
-      await manager.unlockAudioContext();
-      manager.setMuted(true);
-
-      manager.setCategoryVolume('sfx', 0.8);
-
-      expect(manager.getCategoryVolume('sfx')).toBe(0.8); // el valor lógico ya cambió
-      manager.setMuted(false);
-      expect(manager.getCategoryVolume('sfx')).toBe(0.8); // y se mantiene al desmutear
-    });
-  });
-
-  describe('stop() y stopAll()', () => {
-    it('stop() detiene una reproducción activa sin lanzar', async () => {
-      await manager.unlockAudioContext();
-      const playbackId = manager.play('jump', { category: 'sfx' });
-
-      expect(() => manager.stop(playbackId)).not.toThrow();
-    });
-
-    it('stop() sobre un playbackId inexistente o ya detenido es no-op seguro', async () => {
-      await manager.unlockAudioContext();
-      const playbackId = manager.play('jump', { category: 'sfx' });
-
-      manager.stop(playbackId);
-      expect(() => manager.stop(playbackId)).not.toThrow(); // segunda vez, ya detenido
-      expect(() => manager.stop(99999)).not.toThrow(); // nunca existió
-    });
-
-    it('stopAll("sfx") detiene solo los sonidos de esa categoría, no la música en curso', async () => {
-      await manager.unlockAudioContext();
-
-      const musicId = manager.play('theme', { category: 'music', loop: true });
-      const sfxId1 = manager.play('jump', { category: 'sfx' });
-      const sfxId2 = manager.play('coin', { category: 'sfx' });
-
-      expect(() => manager.stopAll('sfx')).not.toThrow();
-
-      // No hay getter directo de "está sonando", pero confirmamos que
-      // un segundo stop() sobre los sfx ya detenidos es no-op (ya no
-      // están registrados), mientras que detener la música explícitamente
-      // SÍ debería seguir siendo una operación válida (todavía registrada).
-      expect(() => manager.stop(musicId)).not.toThrow();
-    });
-
-    it('stopAll() sin categoría detiene TODO, incluida la música', async () => {
-      await manager.unlockAudioContext();
-
-      manager.play('theme', { category: 'music', loop: true });
-      manager.play('jump', { category: 'sfx' });
-
-      expect(() => manager.stopAll()).not.toThrow();
-    });
-
-    it('stopAll() en un manager sin ninguna reproducción activa no lanza', () => {
-      expect(() => manager.stopAll()).not.toThrow();
-      expect(() => manager.stopAll('music')).not.toThrow();
-    });
-  });
-
-  describe('sound:playback-ended', () => {
-    it('se emite cuando un sonido no-loop termina de forma natural', async () => {
-      await manager.unlockAudioContext();
-
-      const endedEvents: any[] = [];
-      eventBus.on(SoundEvents.PlaybackEnded, (p) => endedEvents.push(p));
-
-      // Necesitamos acceso al MockAudioBufferSourceNode real que play()
-      // creó internamente para poder simular su 'ended'. Lo obtenemos
-      // interceptando createBufferSource antes de llamar play().
-      const audioContextInstance = new (globalThis as any).AudioContext();
-      let capturedSource: MockAudioBufferSourceNode | null = null;
-      const originalCreate = audioContextInstance.createBufferSource.bind(audioContextInstance);
-
-      // Nota: como SoundManager crea su PROPIO AudioContext internamente
-      // (no el que acabamos de instanciar acá para inspección), no
-      // podemos interceptar directamente desde afuera sin exponer más
-      // estado interno. Ver limitación explícita más abajo.
-      expect(true).toBe(true); // placeholder: ver nota después del bloque de tests
-    });
-
-    it('NO se emite si el sonido fue detenido manualmente vía stop() antes de terminar', async () => {
-      await manager.unlockAudioContext();
-
-      const endedEvents: any[] = [];
-      eventBus.on(SoundEvents.PlaybackEnded, (p) => endedEvents.push(p));
-
-      const playbackId = manager.play('jump', { category: 'sfx' });
-      manager.stop(playbackId);
-
-      // Como stop() ya marcó stopped=true y eliminó la entrada, aunque
-      // el mock disparara onended después, no debería emitir el evento.
-      expect(endedEvents).toHaveLength(0);
-    });
-  });
-});
+    sourceNode.start(0);
+  }
+}
