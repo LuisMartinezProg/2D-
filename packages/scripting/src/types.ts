@@ -1,5 +1,6 @@
 import type { World, EntityId } from '@mochigo/ecs';
 import type { EventBus } from '@mochigo/events';
+import type { Vector2 } from '@mochigo/math';
 
 export type SchemaFieldType = 'number' | 'string' | 'boolean' | 'vector2' | 'color' | 'entity';
 
@@ -18,6 +19,11 @@ export interface GameContext {
   eventBus: EventBus;
   entity: EntityId;
   deltaTime: number;
+  // Solo presente cuando el contexto acompaña a onCollisionEnter (Physics
+  // lo incluye en el payload real de collision:enter, pero no en
+  // stay/exit - ver 06-physics.md sección 6). undefined en cualquier
+  // otro hook.
+  contactPoint?: Vector2;
 }
 
 export abstract class ScriptComponent {
@@ -31,7 +37,6 @@ export abstract class ScriptComponent {
   onDestroy?(ctx: GameContext): void;
 }
 
-/** Constructor de una subclase concreta de ScriptComponent (no la clase abstracta en sí). */
 export type ScriptComponentClass = (new () => ScriptComponent) & {
   componentName: string;
   schema: ComponentSchema;
