@@ -1,6 +1,6 @@
 import type { System, World, EntityId, ComponentClass } from '@mochigo/ecs';
 import type { EventBus } from '@mochigo/events';
-import type { ScriptComponent, ScriptComponentClass, GameContext } from './types';
+import type { ScriptComponent, ScriptComponentClass, GameContext, Vector2 } from './types';
 import { ExternalEventNames } from './ExternalEventNames';
 
 export class ScriptingSystem implements System {
@@ -65,11 +65,11 @@ export class ScriptingSystem implements System {
 
   // ── Handlers de eventos externos ─────────────────────────
 
-  private handleCollisionEnter = (payload: { entityA: EntityId; entityB: EntityId }): void => {
+  private handleCollisionEnter = (payload: { entityA: EntityId; entityB: EntityId; contactPoint: Vector2 }): void => {
     // Ambas entidades ven a la otra como "other" (checklist: si ambas
     // tienen scripts con ese hook, ambas deben recibir la llamada).
-    this.dispatchCollisionHook(payload.entityA, payload.entityB, 'onCollisionEnter');
-    this.dispatchCollisionHook(payload.entityB, payload.entityA, 'onCollisionEnter');
+    this.dispatchCollisionHook(payload.entityA, payload.entityB, 'onCollisionEnter', payload.contactPoint);
+    this.dispatchCollisionHook(payload.entityB, payload.entityA, 'onCollisionEnter', payload.contactPoint);
   };
 
   private handleCollisionExit = (payload: { entityA: EntityId; entityB: EntityId }): void => {
@@ -80,7 +80,8 @@ export class ScriptingSystem implements System {
   private dispatchCollisionHook(
     self: EntityId,
     other: EntityId,
-    hookName: 'onCollisionEnter' | 'onCollisionExit'
+    hookName: 'onCollisionEnter' | 'onCollisionExit',
+    contactPoint?: Vector2
   ): void {
     const world = this.requireWorld('collision');
     if (!world) return;
@@ -93,7 +94,7 @@ export class ScriptingSystem implements System {
       const hook = script?.[hookName];
       if (!script || !hook) continue;
 
-      const ctx: GameContext = { world, eventBus: this.eventBus, entity: self, deltaTime: 0 };
+      const ctx: GameContext = { world, eventBus: this.eventBus, entity: self, deltaTime: 0, contactPoint };
       this.safeInvoke(() => hook.call(script, ctx, other), self, scriptClass.componentName, hookName);
     }
   }
