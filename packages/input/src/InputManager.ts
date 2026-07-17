@@ -33,6 +33,10 @@ export class InputManager {
   // ids reales del sistema operativo.
   private static readonly SYNTHETIC_TOUCH_ID = 0;
 
+  // ── Reclamo exclusivo de touch (usado por VirtualJoystick u otros
+  // consumidores que necesiten "dueño único" de un touch id) ──
+  private claimedTouchIds = new Set<number>();
+
   constructor(
     private readonly targetElement: HTMLElement,
     private readonly eventBus: EventBus
@@ -75,6 +79,18 @@ export class InputManager {
     return this.activeTouches.get(id);
   }
 
+  /** true si logró reclamarlo (no estaba tomado); false si ya era de otro. */
+  claimTouch(id: number): boolean {
+    if (this.claimedTouchIds.has(id)) return false;
+    this.claimedTouchIds.add(id);
+    return true;
+  }
+
+  /** No-op seguro si el id no estaba reclamado. */
+  releaseTouch(id: number): void {
+    this.claimedTouchIds.delete(id);
+  }
+
   // ── Ciclo de frame ───────────────────────────────────────
 
   /**
@@ -95,8 +111,8 @@ export class InputManager {
 
   /** Libera listeners del DOM. Llamar al destruir el InputManager. */
   destroy(): void {
-    this.targetElement.removeEventListener('keydown', this.handleKeyDown);
-    this.targetElement.removeEventListener('keyup', this.handleKeyUp);
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
     this.targetElement.removeEventListener('mousedown', this.handleMouseDown);
     this.targetElement.removeEventListener('mousemove', this.handleMouseMove);
     this.targetElement.removeEventListener('mouseup', this.handleMouseUp);
@@ -204,6 +220,7 @@ export class InputManager {
     if (!touch) return;
 
     this.activeTouches.delete(id);
+    this.claimedTouchIds.delete(id);
     this.eventBus.emit(InputEvents.TouchEnd, { touchId: id, position: touch.position });
   }
 
@@ -268,6 +285,7 @@ export class InputManager {
       if (!existing) continue;
 
       this.activeTouches.delete(t.identifier);
+      this.claimedTouchIds.delete(t.identifier);
       this.eventBus.emit(InputEvents.TouchEnd, {
         touchId: t.identifier,
         position: existing.position,
