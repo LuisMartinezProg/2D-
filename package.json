@@ -1,5 +1,5 @@
 {
-  "name": "@mochigo/core",
+  "name": "@mochigo/events",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,10 +8,6 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest"
-  },
-  "dependencies": {
-    "@mochigo/ecs": "workspace:*",
-    "@mochigo/events": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^2.0.0",
