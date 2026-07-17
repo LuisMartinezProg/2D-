@@ -1,12 +1,5 @@
 import { vi } from 'vitest';
 
-/**
- * Mock mínimo pero fiel de la cadena Web Audio API. No implementa
- * procesamiento de audio real (no hace falta para estos tests) - solo
- * trackea conexiones entre nodos y valores de gain, que es exactamente
- * lo que el checklist pide verificar (jerarquía de 3 niveles, volumen
- * combinado).
- */
 export class MockGainNode {
   gain = { value: 1 };
   connectedTo: MockGainNode[] = [];
@@ -36,11 +29,9 @@ export class MockAudioBufferSourceNode {
     this.started = true;
   }
   stop(): void {
-    if (this.stopped) throw new Error('ya detenido'); // imita el comportamiento real de algunos navegadores
+    if (this.stopped) throw new Error('ya detenido');
     this.stopped = true;
   }
-
-  /** Helper de test: simula que el navegador disparó 'ended' de forma natural. */
   simulateNaturalEnd(): void {
     this.onended?.();
   }
@@ -51,16 +42,24 @@ export class MockAudioContext {
   destination = new MockGainNode();
   sampleRate = 44100;
 
+  // Registro de todas las fuentes creadas por ESTA instancia de
+  // contexto, en orden - permite que los tests accedan "la última
+  // fuente creada" sin que SoundManager necesite exponer nada nuevo en
+  // su interfaz pública solo para hacerlo testeable.
+  createdSources: MockAudioBufferSourceNode[] = [];
+
   createGain(): MockGainNode {
     return new MockGainNode();
   }
 
   createBufferSource(): MockAudioBufferSourceNode {
-    return new MockAudioBufferSourceNode();
+    const source = new MockAudioBufferSourceNode();
+    this.createdSources.push(source);
+    return source;
   }
 
   createBuffer(_channels: number, _length: number, _sampleRate: number): unknown {
-    return { duration: 0 }; // buffer silencioso del truco de desbloqueo, no necesita ser real
+    return { duration: 0 };
   }
 
   resume(): Promise<void> {
@@ -69,6 +68,24 @@ export class MockAudioContext {
   }
 }
 
+// Referencia a la ÚLTIMA instancia de MockAudioContext creada - permite
+// que los tests accedan al contexto real que SoundManager instanció
+// internamente, sin que SoundManager necesite exponerlo.
+let lastCreatedInstance: MockAudioContext | null = null;
+
 export function installAudioContextMock(): void {
-  vi.stubGlobal('AudioContext', MockAudioContext);
+  class TrackedMockAudioContext extends MockAudioContext {
+    constructor() {
+      super();
+      lastCreatedInstance = this;
+    }
+  }
+  vi.stubGlobal('AudioContext', TrackedMockAudioContext);
+}
+
+export function getLastAudioContextInstance(): MockAudioContext {
+  if (!lastCreatedInstance) {
+    throw new Error('No se creó ningún AudioContext todavía en este test.');
+  }
+  return lastCreatedInstance;
 }
