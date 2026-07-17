@@ -1,5 +1,5 @@
 {
-  "name": "@mochigo/ecs",
+  "name": "@mochigo/core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,11 +7,11 @@
   "types": "./src/index.ts",
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest",
-    "bench": "vitest bench"
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "@mochigo/math": "workspace:*"
+    "@mochigo/ecs": "workspace:*",
+    "@mochigo/events": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^2.0.0",
