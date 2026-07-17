@@ -21,8 +21,7 @@ export class AnimationSystem implements System {
       const clip = animator.clips.get(animator.currentClip);
       if (!clip) continue;
 
-      // Clip de un solo frame: nunca avanza, no hay división por cero,
-      // pero sí actualiza el sourceRect si aún no está seteado.
+      // Clip de un solo frame: nunca avanza, no hay división por cero.
       if (clip.frames.length <= 1) {
         sprite.sourceRect = clip.frames[0] ?? null;
         continue;
@@ -33,11 +32,15 @@ export class AnimationSystem implements System {
         animator.elapsedInFrame += deltaTime * animator.playbackSpeed;
       }
 
-      // Puede necesitar avanzar más de un frame si deltaTime fue grande
-      // (tab en background, lag spike, etc.) — por eso el while, no el if.
+      // while, no if: si deltaTime fue grande (lag spike), puede
+      // necesitar avanzar más de un frame en un solo update.
       while (animator.elapsedInFrame >= clip.frameDuration) {
         animator.elapsedInFrame -= clip.frameDuration;
         this.advanceFrame(animator, clip, entityId);
+
+        // Si once() acaba de detenerse, no seguimos consumiendo el resto
+        // del tiempo acumulado — ya llegamos al final.
+        if (!animator.playing) break;
       }
 
       sprite.sourceRect = clip.frames[animator.currentFrameIndex];
@@ -51,19 +54,13 @@ export class AnimationSystem implements System {
       case 'once': {
         if (animator.currentFrameIndex < lastIndex) {
           animator.currentFrameIndex++;
-          this.eventBus.emit('animation:frame-changed', {
-            entityId,
-            frameIndex: animator.currentFrameIndex,
-          });
+          this.emitFrameChanged(entityId, animator.currentFrameIndex);
         } else {
-          // Ya está en el último frame: se detiene ahí y emite completed.
-          if (animator.playing) {
-            animator.playing = false;
-            this.eventBus.emit('animation:completed', {
-              entityId,
-              animationName: clip.name,
-            });
-          }
+          animator.playing = false;
+          this.eventBus.emit('animation:completed', {
+            entityId,
+            animationName: clip.name,
+          });
         }
         break;
       }
@@ -71,33 +68,35 @@ export class AnimationSystem implements System {
       case 'loop': {
         animator.currentFrameIndex =
           animator.currentFrameIndex >= lastIndex ? 0 : animator.currentFrameIndex + 1;
-        this.eventBus.emit('animation:frame-changed', {
-          entityId,
-          frameIndex: animator.currentFrameIndex,
-        });
+        this.emitFrameChanged(entityId, animator.currentFrameIndex);
         break;
       }
 
       case 'ping-pong': {
-        if (!animator.pingPongForward) {
-          // Si no existe la propiedad (ver nota de supuestos), tratamos
-          // dirección como estado derivado — ver alternativa abajo.
+        if (animator.pingPongForward) {
+          if (animator.currentFrameIndex < lastIndex) {
+            animator.currentFrameIndex++;
+          } else {
+            // Llegó al final: rebota, empieza a retroceder.
+            animator.pingPongForward = false;
+            animator.currentFrameIndex--;
+          }
+        } else {
+          if (animator.currentFrameIndex > 0) {
+            animator.currentFrameIndex--;
+          } else {
+            // Llegó al inicio: rebota, vuelve a avanzar.
+            animator.pingPongForward = true;
+            animator.currentFrameIndex++;
+          }
         }
-        this.advancePingPong(animator, lastIndex);
-        this.eventBus.emit('animation:frame-changed', {
-          entityId,
-          frameIndex: animator.currentFrameIndex,
-        });
+        this.emitFrameChanged(entityId, animator.currentFrameIndex);
         break;
       }
     }
   }
 
-  private advancePingPong(animator: Animator, lastIndex: number): void {
-    // Dirección derivada de si venimos subiendo o bajando; se guarda
-    // implícitamente comparando el frame con los extremos.
-    // Necesita un flag de dirección — ver "Supuestos" (#5) sobre por qué
-    // se añade `pingPongForward` al componente Animator en vez de
-    // inferirla sin estado.
+  private emitFrameChanged(entityId: EntityId, frameIndex: number): void {
+    this.eventBus.emit('animation:frame-changed', { entityId, frameIndex });
   }
 }
