@@ -1,10 +1,5 @@
-export type { EntityId, ComponentClass, QueryResult, System } from './types';
-export { World } from './World';
-export { SparseSet } from './SparseSet';
-export { Transform } from './components/Transform';
-export {
-  EcsEvents, noopEventEmitter,
-  type EcsEventEmitter,
-  type EntityCreatedPayload, type EntityDestroyedPayload,
-  type ComponentAddedPayload, type ComponentRemovedPayload,
-} from './events';
+export { GameLoop, type EventBus } from './GameLoop';
+export { TimeAccumulator } from './TimeAccumulator';
+export { GameLoopEvents } from './events';
+export type { GameLoopConfig, FixedUpdateCallback, RenderCallback } from './types';
+export { DEFAULT_CONFIG } from './types';
