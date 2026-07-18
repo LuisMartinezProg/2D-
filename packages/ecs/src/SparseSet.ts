@@ -11,8 +11,9 @@ export class SparseSet<T> {
   }
 
   add(entityId: EntityId, data: T): void {
-    if (this.has(entityId)) {
-      this.denseData[this.sparse[entityId]] = data;
+    const existingIndex = this.sparse[entityId];
+    if (existingIndex !== undefined && existingIndex !== -1 && this.denseEntities[existingIndex] === entityId) {
+      this.denseData[existingIndex] = data;
       return;
     }
     const index = this.denseEntities.length;
@@ -24,12 +25,13 @@ export class SparseSet<T> {
   remove(entityId: EntityId): void {
     if (!this.has(entityId)) return;
 
-    const index = this.sparse[entityId];
+    const index = this.sparse[entityId]!;
     const lastIndex = this.denseEntities.length - 1;
-    const lastEntity = this.denseEntities[lastIndex];
+    const lastEntity = this.denseEntities[lastIndex]!;
+    const lastData = this.denseData[lastIndex]!;
 
     this.denseEntities[index] = lastEntity;
-    this.denseData[index] = this.denseData[lastIndex];
+    this.denseData[index] = lastData;
     this.sparse[lastEntity] = index;
 
     this.denseEntities.pop();
@@ -38,7 +40,7 @@ export class SparseSet<T> {
   }
 
   get(entityId: EntityId): T | undefined {
-    return this.has(entityId) ? this.denseData[this.sparse[entityId]] : undefined;
+    return this.has(entityId) ? this.denseData[this.sparse[entityId]!] : undefined;
   }
 
   get size(): number {
