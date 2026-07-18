@@ -29,8 +29,20 @@ jobs:
       - name: Install dependencies (todo el workspace)
         run: npm install
 
-      - name: Build all packages
-        run: npm run build --workspaces --if-present
+      - name: Build all packages (en orden de dependencias)
+        run: |
+          npm run build --workspace=@mochigo/math
+          npm run build --workspace=@mochigo/ecs
+          npm run build --workspace=@mochigo/events
+          npm run build --workspace=@mochigo/assets
+          npm run build --workspace=@mochigo/renderer
+          npm run build --workspace=@mochigo/physics
+          npm run build --workspace=@mochigo/input
+          npm run build --workspace=@mochigo/animation
+          npm run build --workspace=@mochigo/scenes
+          npm run build --workspace=@mochigo/sound
+          npm run build --workspace=@mochigo/scripting
+          npm run build --workspace=@mochigo/storage
 
       - name: Build editor
         run: npm run build --workspace=@mochigo/editor
