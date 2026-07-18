@@ -76,9 +76,10 @@ export class World {
     if (stores.some((s) => s === undefined)) return EMPTY_QUERY_RESULT;
     const validStores = stores as SparseSet<any>[];
 
-    let smallest = validStores[0];
+    let smallest = validStores[0]!;
     for (let i = 1; i < validStores.length; i++) {
-      if (validStores[i].size < smallest.size) smallest = validStores[i];
+      const candidate = validStores[i]!;
+      if (candidate.size < smallest.size) smallest = candidate;
     }
 
     const matches = (entityId: EntityId): boolean => {
