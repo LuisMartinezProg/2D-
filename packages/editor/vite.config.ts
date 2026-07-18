@@ -1,12 +1,29 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// base: '/2D-/' porque se publica en GitHub Pages bajo ese subpath
-// (luismartinezprog.github.io/2D-/), no en la raíz del dominio.
 export default defineConfig({
   plugins: [react()],
   base: '/2D-/',
+  resolve: {
+    extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
+  },
   build: {
     outDir: 'dist',
+  },
+  optimizeDeps: {
+    // Los paquetes @mochigo/* son código fuente TS local del workspace,
+    // no dependencias externas precompiladas — que Vite los procese
+    // igual que el resto del código fuente, no como node_modules.
+    exclude: [
+      '@mochigo/math',
+      '@mochigo/ecs',
+      '@mochigo/events',
+      '@mochigo/renderer',
+      '@mochigo/assets',
+      '@mochigo/scenes',
+      '@mochigo/physics',
+      '@mochigo/animation',
+      '@mochigo/scripting',
+    ],
   },
 });
