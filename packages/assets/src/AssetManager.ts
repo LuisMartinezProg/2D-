@@ -91,8 +91,9 @@ export class AssetManager {
 
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
-      if (result.status === 'rejected') {
-        errors.push({ assetId: entries[i].id, error: result.reason });
+      const entry = entries[i];
+      if (result && result.status === 'rejected' && entry) {
+        errors.push({ assetId: entry.id, error: result.reason });
       }
     }
 
@@ -108,13 +109,13 @@ export class AssetManager {
     const cached = this.cache.get(id);
     return cached?.kind === 'texture' ? cached.image : undefined;
   }
-getTextureRegion(id: string, regionName: string): Rect | undefined {
+
+  getTextureRegion(id: string, regionName: string): Rect | undefined {
     const cached = this.cache.get(id);
     if (cached?.kind !== 'texture') return undefined;
     if (!cached.regions) return undefined;
     return cached.regions[regionName];
   }
-  
 
   getSound(id: string): AudioBuffer | undefined {
     const cached = this.cache.get(id);
@@ -163,7 +164,11 @@ getTextureRegion(id: string, regionName: string): Rect | undefined {
       regions = atlas.regions;
     }
 
-    this.cache.set(entry.id, { kind: 'texture', id: entry.id, image, regions });
+    if (regions) {
+      this.cache.set(entry.id, { kind: 'texture', id: entry.id, image, regions });
+    } else {
+      this.cache.set(entry.id, { kind: 'texture', id: entry.id, image });
+    }
   }
 
   private loadImage(path: string): Promise<HTMLImageElement> {
