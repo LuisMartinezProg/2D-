@@ -1,13 +1,24 @@
 import type { EntityId, QueryResult } from './types';
-import type { EntityId } from '../types';
 
-export class Transform {
-  static readonly componentName = 'Transform';
-
+export class LazyQueryResult implements QueryResult {
   constructor(
-    public position: Vector2 = Vector2.zero(),
-    public rotation: number = 0,
-    public scale: Vector2 = Vector2.one(),
-    public parent: EntityId | null = null
+    private readonly candidates: readonly EntityId[],
+    private readonly matches: (entityId: EntityId) => boolean
   ) {}
+
+  *[Symbol.iterator](): Iterator<EntityId> {
+    for (const entityId of this.candidates) {
+      if (this.matches(entityId)) yield entityId;
+    }
+  }
+
+  count(): number {
+    let total = 0;
+    for (const entityId of this.candidates) {
+      if (this.matches(entityId)) total++;
+    }
+    return total;
+  }
 }
+
+export const EMPTY_QUERY_RESULT: QueryResult = new LazyQueryResult([], () => true);
