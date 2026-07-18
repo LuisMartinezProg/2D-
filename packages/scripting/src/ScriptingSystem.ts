@@ -76,8 +76,7 @@ export class ScriptingSystem implements System {
     this.dispatchCollisionHook(payload.entityA, payload.entityB, 'onCollisionExit');
     this.dispatchCollisionHook(payload.entityB, payload.entityA, 'onCollisionExit');
   };
-
-  private dispatchCollisionHook(
+private dispatchCollisionHook(
     self: EntityId,
     other: EntityId,
     hookName: 'onCollisionEnter' | 'onCollisionExit',
@@ -94,10 +93,13 @@ export class ScriptingSystem implements System {
       const hook = script?.[hookName];
       if (!script || !hook) continue;
 
-      const ctx: GameContext = { world, eventBus: this.eventBus, entity: self, deltaTime: 0, contactPoint };
+      const ctx: GameContext = contactPoint
+        ? { world, eventBus: this.eventBus, entity: self, deltaTime: 0, contactPoint }
+        : { world, eventBus: this.eventBus, entity: self, deltaTime: 0 };
       this.safeInvoke(() => hook.call(script, ctx, other), self, scriptClass.componentName, hookName);
     }
   }
+  
 
   private handleEntityDestroyed = (payload: { entityId: EntityId }): void => {
     const world = this.requireWorld('entity-destroyed');
