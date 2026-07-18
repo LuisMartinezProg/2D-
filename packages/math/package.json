@@ -9,9 +9,7 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-      "exports": {
-    ".": "./src/index.ts"
-    },
+    }
   },
   "files": [
     "dist"
