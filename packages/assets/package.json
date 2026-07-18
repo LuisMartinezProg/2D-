@@ -1,3 +1,4 @@
+
 {
   "name": "@mochigo/assets",
   "version": "0.1.0",
@@ -7,6 +8,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
+  },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest"
