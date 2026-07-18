@@ -53,11 +53,13 @@ export class PhysicsSystem implements System {
       const gravityX = this.config.gravity.x * body.gravityScale;
       const gravityY = this.config.gravity.y * body.gravityScale;
 
-      body.velocity.x += (gravityX + body.acceleration.x) * dt;
-      body.velocity.y += (gravityY + body.acceleration.y) * dt;
+      // Vector2 es inmutable (x/y son readonly): se reconstruye una
+      // nueva instancia en vez de mutar velocity/position en sitio.
+      body.velocity = new Vector2(
+        body.velocity.x + (gravityX + body.acceleration.x) * dt,
+        body.velocity.y + (gravityY + body.acceleration.y) * dt
+      );
 
-      // Vector2 es inmutable: se crea una nueva instancia en vez de mutar
-      // transform.position.x/.y directamente (esas props son readonly).
       transform.position = new Vector2(
         transform.position.x + body.velocity.x * dt,
         transform.position.y + body.velocity.y * dt
