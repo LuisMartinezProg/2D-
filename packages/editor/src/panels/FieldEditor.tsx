@@ -10,11 +10,9 @@ interface FieldEditorProps {
   onChange: (newValue: unknown) => void;
 }
 
-/** Un tipo de input por cada SchemaFieldType (Scripting, sección 2).
- * "entity" usa un input numérico simple — un selector visual de
- * entidades (lista buscable) queda fuera de alcance de esta v1. */
 export function FieldEditor({ fieldName, field, value, onChange }: FieldEditorProps) {
   const label = field.label ?? fieldName;
+  const inputId = `field-${fieldName}`;
   const labelStyle: React.CSSProperties = {
     fontSize: 11, color: MochiGoTheme.skirk.light, opacity: 0.8,
     display: 'block', marginBottom: 2,
@@ -29,9 +27,9 @@ export function FieldEditor({ fieldName, field, value, onChange }: FieldEditorPr
     case 'number':
       return (
         <div style={{ marginBottom: 8 }}>
-          <label style={labelStyle}>{label}</label>
+          <label htmlFor={inputId} style={labelStyle}>{label}</label>
           <input
-            type="number"
+            id={inputId} type="number"
             value={typeof value === 'number' ? value : (field.default as number)}
             min={field.min} max={field.max} step="any" style={inputStyle}
             onChange={(e) => onChange(e.target.valueAsNumber)}
@@ -42,9 +40,9 @@ export function FieldEditor({ fieldName, field, value, onChange }: FieldEditorPr
     case 'string':
       return (
         <div style={{ marginBottom: 8 }}>
-          <label style={labelStyle}>{label}</label>
+          <label htmlFor={inputId} style={labelStyle}>{label}</label>
           <input
-            type="text" value={typeof value === 'string' ? value : (field.default as string)}
+            id={inputId} type="text" value={typeof value === 'string' ? value : (field.default as string)}
             style={inputStyle} onChange={(e) => onChange(e.target.value)}
           />
         </div>
@@ -54,10 +52,11 @@ export function FieldEditor({ fieldName, field, value, onChange }: FieldEditorPr
       return (
         <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
           <input
-            type="checkbox" checked={typeof value === 'boolean' ? value : (field.default as boolean)}
+            id={inputId} type="checkbox"
+            checked={typeof value === 'boolean' ? value : (field.default as boolean)}
             onChange={(e) => onChange(e.target.checked)}
           />
-          <label style={{ ...labelStyle, marginBottom: 0 }}>{label}</label>
+          <label htmlFor={inputId} style={{ ...labelStyle, marginBottom: 0 }}>{label}</label>
         </div>
       );
 
@@ -65,7 +64,7 @@ export function FieldEditor({ fieldName, field, value, onChange }: FieldEditorPr
       const v = (value as { x: number; y: number } | undefined) ?? (field.default as { x: number; y: number });
       return (
         <div style={{ marginBottom: 8 }}>
-          <label style={labelStyle}>{label}</label>
+          <span style={labelStyle}>{label}</span>
           <div style={{ display: 'flex', gap: 4 }}>
             <input type="number" step="any" value={v.x} style={inputStyle}
               onChange={(e) => onChange({ ...v, x: e.target.valueAsNumber })} aria-label={`${label} X`} />
@@ -79,9 +78,9 @@ export function FieldEditor({ fieldName, field, value, onChange }: FieldEditorPr
     case 'color':
       return (
         <div style={{ marginBottom: 8 }}>
-          <label style={labelStyle}>{label}</label>
+          <label htmlFor={inputId} style={labelStyle}>{label}</label>
           <input
-            type="color" value={typeof value === 'string' ? value : (field.default as string)}
+            id={inputId} type="color" value={typeof value === 'string' ? value : (field.default as string)}
             style={{ ...inputStyle, padding: 0, height: 28 }}
             onChange={(e) => onChange(e.target.value)}
           />
@@ -92,9 +91,9 @@ export function FieldEditor({ fieldName, field, value, onChange }: FieldEditorPr
       const entityValue = value as EntityId | null;
       return (
         <div style={{ marginBottom: 8 }}>
-          <label style={labelStyle}>{label}</label>
+          <label htmlFor={inputId} style={labelStyle}>{label}</label>
           <input
-            type="number" value={entityValue ?? ''} placeholder="(ninguna)" style={inputStyle}
+            id={inputId} type="number" value={entityValue ?? ''} placeholder="(ninguna)" style={inputStyle}
             onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
           />
         </div>
