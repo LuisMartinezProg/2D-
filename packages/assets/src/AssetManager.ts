@@ -108,12 +108,13 @@ export class AssetManager {
     const cached = this.cache.get(id);
     return cached?.kind === 'texture' ? cached.image : undefined;
   }
-
-  getTextureRegion(id: string, regionName: string): Rect | undefined {
+getTextureRegion(id: string, regionName: string): Rect | undefined {
     const cached = this.cache.get(id);
     if (cached?.kind !== 'texture') return undefined;
-    return cached.regions?.[regionName];
+    if (!cached.regions) return undefined;
+    return cached.regions[regionName];
   }
+  
 
   getSound(id: string): AudioBuffer | undefined {
     const cached = this.cache.get(id);
