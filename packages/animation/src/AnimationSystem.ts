@@ -36,9 +36,8 @@ export class AnimationSystem implements System {
         this.advanceFrame(animator, clip, entityId);
         if (!animator.playing) break;
       }
-
-      sprite.sourceRect = clip.frames[animator.currentFrameIndex];
-    }
+sprite.sourceRect = clip.frames[animator.currentFrameIndex] ?? null;
+       }
   }
 
   private advanceFrame(animator: Animator, clip: AnimationClip, entityId: EntityId): void {
