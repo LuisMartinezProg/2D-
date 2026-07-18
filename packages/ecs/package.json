@@ -10,7 +10,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@mochigo/math": "workspace:*"
+    "@mochigo/math": "*"
   },
   "devDependencies": {
     "vitest": "^2.0.0",
