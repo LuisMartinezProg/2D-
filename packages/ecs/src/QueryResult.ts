@@ -1,4 +1,4 @@
-import { Vector2 } from '@mochigo/math';
+import type { EntityId, QueryResult } from './types';
 import type { EntityId } from '../types';
 
 export class Transform {
