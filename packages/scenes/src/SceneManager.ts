@@ -24,7 +24,13 @@ export class SceneManager {
   getCurrentSceneName(): string | null {
     return this.currentSceneName;
   }
-
+/** Getter de solo lectura sobre el registro interno ya existente —
+   * permite que Editor (u otro consumidor futuro) inicialice su propia
+   * vista de "qué entidades existen" al arrancar, sin que World necesite
+   * exponer una forma genérica de enumerar todas las entidades. */
+  getCurrentSceneEntities(): ReadonlySet<EntityId> {
+    return this.currentSceneEntities;
+  }
   async loadScene(sceneData: SceneDefinition): Promise<void> {
     // Paso 1: emitir scene:loading (sección 4, orden exacto)
     this.eventBus.emit(SceneEvents.Loading, { sceneName: sceneData.name });
