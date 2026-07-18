@@ -40,3 +40,8 @@ const editor = new Editor({
 });
 
 editor.mount();
+
+// Escena vacía inicial: sin esto, serializeCurrentScene() (que usa
+// EditorApp para listar texturas conocidas) lanza porque no hay
+// ninguna escena cargada todavía al abrir el editor.
+sceneManager.loadScene({ name: 'Escena sin título', manifest: [], entities: [] });
