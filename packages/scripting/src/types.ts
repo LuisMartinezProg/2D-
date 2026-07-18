@@ -2,6 +2,8 @@ import type { World, EntityId } from '@mochigo/ecs';
 import type { EventBus } from '@mochigo/events';
 import type { Vector2 } from '@mochigo/math';
 
+export type { Vector2 };
+
 export type SchemaFieldType = 'number' | 'string' | 'boolean' | 'vector2' | 'color' | 'entity';
 
 export interface SchemaField {
@@ -19,10 +21,6 @@ export interface GameContext {
   eventBus: EventBus;
   entity: EntityId;
   deltaTime: number;
-  // Solo presente cuando el contexto acompaña a onCollisionEnter (Physics
-  // lo incluye en el payload real de collision:enter, pero no en
-  // stay/exit - ver 06-physics.md sección 6). undefined en cualquier
-  // otro hook.
   contactPoint?: Vector2;
 }
 
