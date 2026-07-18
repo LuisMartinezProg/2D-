@@ -18,7 +18,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@mochigo/ecs": "*"
+    "@mochigo/ecs": "*",
+    "@mochigo/events": "*",
+    "@mochigo/renderer": "*"
   },
   "devDependencies": {
     "vitest": "^2.0.0",
