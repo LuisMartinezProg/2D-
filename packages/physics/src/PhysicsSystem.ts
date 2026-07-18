@@ -1,29 +1,19 @@
 import type { System, World, EntityId } from '@mochigo/ecs';
+import { Transform } from '@mochigo/ecs';
 import type { EventBus } from '@mochigo/events';
-import type { Rect, Vector2 } from '@mochigo/math';
+import { Vector2 } from '@mochigo/math';
+import type { Rect } from '@mochigo/math';
 import { Quadtree } from './Quadtree';
 import { RigidBody, Collider } from './components';
 import { PhysicsEvents } from './PhysicsEvents';
-
-// Transform se asume del mismo módulo Renderer que ya vimos referenciado
-// en Sprite.ts y en el formato de escena (09-scenes.md) - no confirmado
-// con código real de un archivo Transform.ts propio en este chat, pero
-// su forma ({ position: Vector2, rotation: number, scale: Vector2 }) sí
-// está confirmada por el JSON de ejemplo de 09-scenes.md sección 2.
-import type { Transform } from '@mochigo/renderer';
 
 export interface PhysicsConfig {
   gravity: Vector2;
   quadtreeMaxDepth: number;
   quadtreeMaxEntitiesPerNode: number;
-  // No estaba en la ficha original: el Quadtree necesita un área total
-  // sobre la cual construirse, y ningún campo de PhysicsConfig la
-  // provee. Ver nota de decisión más abajo.
   worldBounds: Rect;
 }
 
-/** Clave estable para un par de entidades, sin importar el orden en que
- * se descubrió el par (A,B) === (B,A). */
 function pairKey(a: EntityId, b: EntityId): string {
   const [lo, hi] = a < b ? [a, b] : [b, a];
   return `${lo}:${hi}`;
@@ -32,7 +22,6 @@ function pairKey(a: EntityId, b: EntityId): string {
 export class PhysicsSystem implements System {
   readonly name = 'PhysicsSystem';
 
-  // Pares en colisión durante el paso anterior, para derivar enter/stay/exit.
   private previousCollidingPairs = new Set<string>();
 
   constructor(
@@ -57,20 +46,22 @@ export class PhysicsSystem implements System {
   private integrate(world: World, dt: number): void {
     for (const entity of world.query([RigidBody, Transform])) {
       const body = world.getComponent(entity, RigidBody)!;
-      if (body.isStatic) continue; // los estáticos nunca se mueven por integración
+      if (body.isStatic) continue;
 
       const transform = world.getComponent(entity, Transform)!;
 
-      // gravedad (escalada) + acceleration -> velocity
       const gravityX = this.config.gravity.x * body.gravityScale;
       const gravityY = this.config.gravity.y * body.gravityScale;
 
       body.velocity.x += (gravityX + body.acceleration.x) * dt;
       body.velocity.y += (gravityY + body.acceleration.y) * dt;
 
-      // velocity -> position
-      transform.position.x += body.velocity.x * dt;
-      transform.position.y += body.velocity.y * dt;
+      // Vector2 es inmutable: se crea una nueva instancia en vez de mutar
+      // transform.position.x/.y directamente (esas props son readonly).
+      transform.position = new Vector2(
+        transform.position.x + body.velocity.x * dt,
+        transform.position.y + body.velocity.y * dt
+      );
     }
   }
 
@@ -112,16 +103,12 @@ export class PhysicsSystem implements System {
     currentCollidingPairs: Set<string>
   ): void {
     const entitiesWithCollider = Array.from(world.query([Collider, Transform]));
-    // Evita procesar el mismo par dos veces (A vs B Y B vs A) dentro del
-    // mismo update(): un Set de claves ya vistas EN ESTE FRAME, separado
-    // de previousCollidingPairs (que es del frame anterior).
     const processedThisFrame = new Set<string>();
 
     for (const entityA of entitiesWithCollider) {
       const boundsA = this.getColliderBounds(world, entityA);
       if (!boundsA) continue;
 
-      // Broad phase: candidatos cercanos vía quadtree.
       const candidates = quadtree.query(boundsA);
 
       for (const entityB of candidates) {
@@ -134,7 +121,6 @@ export class PhysicsSystem implements System {
         const boundsB = this.getColliderBounds(world, entityB);
         if (!boundsB) continue;
 
-        // Narrow phase: test AABB-AABB exacto.
         const overlap = this.getOverlap(boundsA, boundsB);
         if (!overlap) continue;
 
@@ -148,10 +134,9 @@ export class PhysicsSystem implements System {
           if (isFirstContact) {
             this.emitEnter(entityA, entityB, overlap);
           }
-          continue; // trigger: nunca resolución física
+          continue;
         }
 
-        // Resolución física: separar en el eje de MENOR solapamiento.
         this.resolveCollision(world, entityA, entityB, overlap);
 
         if (isFirstContact) {
@@ -165,12 +150,12 @@ export class PhysicsSystem implements System {
     const overlapX = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
     const overlapY = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
 
-    if (overlapX <= 0 || overlapY <= 0) return null; // no hay intersección real
+    if (overlapX <= 0 || overlapY <= 0) return null;
 
-    const contactPoint: Vector2 = {
-      x: Math.max(a.x, b.x) + overlapX / 2,
-      y: Math.max(a.y, b.y) + overlapY / 2,
-    } as Vector2;
+    const contactPoint = new Vector2(
+      Math.max(a.x, b.x) + overlapX / 2,
+      Math.max(a.y, b.y) + overlapY / 2
+    );
 
     return { x: overlapX, y: overlapY, contactPoint };
   }
@@ -189,9 +174,8 @@ export class PhysicsSystem implements System {
     const aIsStatic = !bodyA || bodyA.isStatic;
     const bIsStatic = !bodyB || bodyB.isStatic;
 
-    if (aIsStatic && bIsStatic) return; // dos estáticos no se separan entre sí
+    if (aIsStatic && bIsStatic) return;
 
-    // Eje de MENOR solapamiento: es el camino más corto para separar los AABB.
     const separateOnX = overlap.x < overlap.y;
     const boundsA = this.getColliderBounds(world, entityA)!;
     const boundsB = this.getColliderBounds(world, entityB)!;
@@ -214,18 +198,12 @@ export class PhysicsSystem implements System {
     dy: number
   ): void {
     if (aIsStatic) {
-      // Solo B se mueve, la separación completa recae sobre B.
-      transformB.position.x -= dx;
-      transformB.position.y -= dy;
+      transformB.position = new Vector2(transformB.position.x - dx, transformB.position.y - dy);
     } else if (bIsStatic) {
-      transformA.position.x += dx;
-      transformA.position.y += dy;
+      transformA.position = new Vector2(transformA.position.x + dx, transformA.position.y + dy);
     } else {
-      // Ninguno estático: cada uno absorbe la mitad de la separación.
-      transformA.position.x += dx / 2;
-      transformA.position.y += dy / 2;
-      transformB.position.x -= dx / 2;
-      transformB.position.y -= dy / 2;
+      transformA.position = new Vector2(transformA.position.x + dx / 2, transformA.position.y + dy / 2);
+      transformB.position = new Vector2(transformB.position.x - dx / 2, transformB.position.y - dy / 2);
     }
   }
 
@@ -256,7 +234,7 @@ export class PhysicsSystem implements System {
   }
 
   private parsePairKey(key: string): [EntityId, EntityId] {
-    const [a, b] = key.split(':').map(Number);
-    return [a, b];
+    const parts = key.split(':').map(Number);
+    return [parts[0]!, parts[1]!];
   }
 }
