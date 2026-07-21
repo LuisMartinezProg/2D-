@@ -1,5 +1,4 @@
-import { vector2 } from './Vector2';
-
+import { Vector2 } from './vector2';
 /**
  * Rect: inmutable, igual que Vector2. Representa un rectángulo alineado a
  * ejes (AABB) mediante x/y (esquina superior-izquierda) + width/height.
