@@ -1,8 +1,10 @@
 import type { Rect } from '@mochigo/math';
-
+import { Rect } from '@mochigo/math';
 export class Sprite {
   static readonly componentName = 'Sprite';
-
+ 
+export class Sprite {
+  sourceRect: Rect;
   constructor(
     public textureId: string,
     public sourceRect: Rect | null = null,
