@@ -1,9 +1,7 @@
 import type { EntityId } from '@mochigo/ecs';
 import type { Rect } from '@mochigo/math';
-import { Rect } from '@mochigo/math';
 
 export class Camera {
-  bounds: Rect;
   static readonly componentName = 'Camera';
 
   constructor(
