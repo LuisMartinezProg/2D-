@@ -1,4 +1,4 @@
-import { Vector2 } from './Vector2';
+import { vector2 } from './Vector2';
 
 /**
  * Rect: inmutable, igual que Vector2. Representa un rectángulo alineado a
