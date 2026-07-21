@@ -1,13 +1,17 @@
 /**
- * Vector 2D inmutable. Cada operación retorna una nueva instancia en vez de mutar
- * `this` — más seguro (evita bugs por aliasing) a costa de más allocations. Ver
- * decisión de diseño en docs/01-MODULOS/00-math.md sección 4.
+ * Vector2: inmutable. Ningún método muta la instancia sobre la que se llama;
+ * todos devuelven una instancia nueva. Esto es intencional (confirmado por uso
+ * real en PhysicsSystem, que reconstruye con `new Vector2(...)` en vez de
+ * mutar position.x/velocity.x directo).
  */
 export class Vector2 {
-  constructor(
-    public readonly x: number,
-    public readonly y: number
-  ) {}
+  readonly x: number;
+  readonly y: number;
+
+  constructor(x: number, y: number) {
+    this.x = x;
+    this.y = y;
+  }
 
   static zero(): Vector2 {
     return new Vector2(0, 0);
@@ -15,10 +19,6 @@ export class Vector2 {
 
   static one(): Vector2 {
     return new Vector2(1, 1);
-  }
-
-  static from(x: number, y: number): Vector2 {
-    return new Vector2(x, y);
   }
 
   add(other: Vector2): Vector2 {
@@ -33,51 +33,40 @@ export class Vector2 {
     return new Vector2(this.x * scalar, this.y * scalar);
   }
 
+  multiply(other: Vector2): Vector2 {
+    return new Vector2(this.x * other.x, this.y * other.y);
+  }
+
+  negate(): Vector2 {
+    return new Vector2(-this.x, -this.y);
+  }
+
+  magnitude(): number {
+    return Math.sqrt(this.x * this.x + this.y * this.y);
+  }
+
+  magnitudeSquared(): number {
+    return this.x * this.x + this.y * this.y;
+  }
+
+  normalize(): Vector2 {
+    const mag = this.magnitude();
+    if (mag === 0) {
+      return Vector2.zero();
+    }
+    return new Vector2(this.x / mag, this.y / mag);
+  }
+
   dot(other: Vector2): number {
     return this.x * other.x + this.y * other.y;
   }
 
-  lengthSquared(): number {
-    return this.x * this.x + this.y * this.y;
-  }
-
-  length(): number {
-    return Math.sqrt(this.lengthSquared());
-  }
-
-  /**
-   * Vector unitario en la misma dirección. Caso borde: normalizar el vector cero
-   * matemáticamente no está definido (división por longitud 0). En vez de propagar
-   * NaN al resto del motor —que sería un bug silencioso muy difícil de rastrear en
-   * quien lo consuma— se retorna Vector2.zero() de forma explícita y documentada.
-   */
-  normalize(): Vector2 {
-    const len = this.length();
-    if (len === 0) {
-      return Vector2.zero();
-    }
-    return new Vector2(this.x / len, this.y / len);
-  }
-
   distanceTo(other: Vector2): number {
-    return this.subtract(other).length();
+    return this.subtract(other).magnitude();
   }
 
-  /**
-   * Ángulo del vector respecto al eje +X, en radianes, usando atan2 (maneja
-   * correctamente los 4 cuadrantes, incluyendo el vector cero que retorna 0).
-   */
-  angle(): number {
-    return Math.atan2(this.y, this.x);
-  }
-
-  rotate(radians: number): Vector2 {
-    const cos = Math.cos(radians);
-    const sin = Math.sin(radians);
-    return new Vector2(
-      this.x * cos - this.y * sin,
-      this.x * sin + this.y * cos
-    );
+  distanceSquaredTo(other: Vector2): number {
+    return this.subtract(other).magnitudeSquared();
   }
 
   lerp(other: Vector2, t: number): Vector2 {
@@ -87,15 +76,15 @@ export class Vector2 {
     );
   }
 
-  equals(other: Vector2, epsilon = 1e-6): boolean {
-    return Math.abs(this.x - other.x) <= epsilon && Math.abs(this.y - other.y) <= epsilon;
+  equals(other: Vector2): boolean {
+    return this.x === other.x && this.y === other.y;
   }
 
   clone(): Vector2 {
     return new Vector2(this.x, this.y);
   }
 
-  toArray(): [number, number] {
-    return [this.x, this.y];
+  toString(): string {
+    return `Vector2(${this.x}, ${this.y})`;
   }
 }
