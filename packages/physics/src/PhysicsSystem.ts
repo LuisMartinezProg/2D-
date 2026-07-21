@@ -6,7 +6,14 @@ import type { Rect } from '@mochigo/math';
 import { Quadtree } from './Quadtree';
 import { RigidBody, Collider } from './components';
 import { PhysicsEvents } from './PhysicsEvents';
+import { Vector2, Rect, rectsIntersect } from '@mochigo/math';
 
+export function integrate(transform: { position: Vector2 }, velocity: Vector2, dt: number): void {
+  transform.position = transform.position.add(velocity.scale(dt));
+}
+export function checkAABBCollision(a: Rect, b: Rect): boolean {
+  return rectsIntersect(a, b);
+}
 export interface PhysicsConfig {
   gravity: Vector2;
   quadtreeMaxDepth: number;
