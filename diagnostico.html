@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagnóstico — MochiGo Engine</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Cinzel:wght@400;700&display=swap');
+  :root {
+    --bg: #080a0e; --panel: #0d1117; --border: #1e2a38;
+    --accent: #c8922a; --accent2: #4a9eff; --ok: #3ddc84;
+    --err: #ff4d4d; --pending: #555e6e; --text: #a8b8cc;
+    --text-bright: #dce8f5; --mono: 'Share Tech Mono', monospace; --serif: 'Cinzel', serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text); font-family: var(--mono);
+    min-height: 100vh; padding: 24px 16px 48px;
+    background-image:
+      radial-gradient(ellipse 80% 40% at 50% 0%, rgba(200,146,42,0.07) 0%, transparent 60%),
+      repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(30,42,56,0.3) 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(30,42,56,0.15) 40px);
+  }
+  header { text-align: center; margin-bottom: 32px; position: relative; }
+  .game-title { font-family: var(--serif); font-size: clamp(18px,4vw,28px); color: var(--accent); letter-spacing: 0.15em; text-shadow: 0 0 30px rgba(200,146,42,0.4); margin-bottom: 4px; }
+  .diag-title { font-size: 11px; letter-spacing: 0.3em; color: var(--pending); text-transform: uppercase; }
+  .timestamp { font-size: 11px; color: var(--pending); margin-top: 8px; }
+  .divider { height: 1px; background: linear-gradient(90deg, transparent, var(--accent), transparent); margin: 16px 0 28px; opacity: 0.4; }
+  .summary-bar { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 28px; }
+  .summary-chip { display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 8px 16px; font-size: 13px; }
+  .chip-num { font-size: 20px; font-weight: bold; }
+  .chip-ok .chip-num { color: var(--ok); }
+  .chip-err .chip-num { color: var(--err); }
+  .chip-warn .chip-num { color: var(--accent); }
+  .chip-pending .chip-num { color: var(--pending); }
+  .chip-total .chip-num { color: var(--text-bright); }
+  .progress-wrap { max-width: 600px; margin: 0 auto 32px; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--pending); margin-bottom: 6px; letter-spacing: 0.1em; }
+  .progress-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent2), var(--ok)); border-radius: 3px; transition: width 1.2s cubic-bezier(0.4,0,0.2,1); box-shadow: 0 0 8px rgba(61,220,132,0.4); }
+  .sections { display: flex; flex-direction: column; gap: 16px; max-width: 700px; margin: 0 auto; }
+  .section { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .section-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; }
+  .section-header:hover { background: rgba(255,255,255,0.04); }
+  .section-title { font-size: 12px; letter-spacing: 0.15em; color: var(--text-bright); }
+  .section-icon { margin-right: 8px; }
+  .section-stats { display: flex; gap: 10px; font-size: 11px; }
+  .stat-ok { color: var(--ok); } .stat-err { color: var(--err); } .stat-warn { color: var(--accent); } .stat-pending { color: var(--pending); }
+  .chevron { font-size: 10px; color: var(--pending); transition: transform 0.2s; margin-left: 10px; }
+  .section.collapsed .chevron { transform: rotate(-90deg); }
+  .file-list { padding: 6px 0; }
+  .section.collapsed .file-list { display: none; }
+  .file-row { display: flex; align-items: center; padding: 5px 14px; gap: 10px; font-size: 12px; border-left: 2px solid transparent; transition: background 0.15s; opacity: 0; transform: translateX(-6px); animation: rowIn 0.25s forwards; }
+  .file-row:hover { background: rgba(255,255,255,0.025); }
+  @keyframes rowIn { to { opacity: 1; transform: translateX(0); } }
+  .status-icon { width: 14px; text-align: center; font-size: 13px; flex-shrink: 0; }
+  .row-ok { border-left-color: var(--ok); } .row-ok .status-icon { color: var(--ok); }
+  .row-err { border-left-color: var(--err); } .row-err .status-icon { color: var(--err); }
+  .row-warn { border-left-color: var(--accent); } .row-warn .status-icon { color: var(--accent); }
+  .row-pending { border-left-color: var(--pending); opacity: 0.5 !important; } .row-pending .status-icon { color: var(--pending); }
+  .file-path { color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-export { color: var(--accent2); font-size: 11px; flex-shrink: 0; }
+  .row-pending .file-export { color: var(--pending); font-style: italic; }
+  .row-err .file-export { color: var(--err); }
+  .row-warn .file-export { color: var(--accent); }
+  .error-msg { font-size: 10px; color: var(--err); padding: 3px 14px 3px 38px; opacity: 0.8; word-break: break-all; }
+  .warn-msg { font-size: 10px; color: var(--accent); padding: 3px 14px 3px 38px; opacity: 0.85; word-break: break-all; }
+  .btn-row { display: flex; gap: 10px; justify-content: center; margin-top: 28px; flex-wrap: wrap; }
+  .btn { font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; padding: 9px 20px; border-radius: 4px; border: 1px solid; cursor: pointer; transition: all 0.15s; text-transform: uppercase; background: transparent; }
+  .btn-primary { background: rgba(200,146,42,0.12); border-color: var(--accent); color: var(--accent); }
+  .btn-primary:hover { background: rgba(200,146,42,0.22); box-shadow: 0 0 12px rgba(200,146,42,0.3); }
+  .btn-secondary { background: transparent; border-color: var(--border); color: var(--pending); }
+  .btn-secondary:hover { border-color: var(--text); color: var(--text-bright); }
+  .running-indicator { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 8px; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; box-shadow:0 0 0 0 rgba(200,146,42,0.5); } 50% { opacity:0.6; box-shadow:0 0 0 5px rgba(200,146,42,0); } }
+  .status-line { text-align: center; font-size: 11px; color: var(--pending); margin-bottom: 20px; min-height: 18px; }
+
+  .report-wrap { max-width: 700px; margin: 32px auto 0; display: none; }
+  .report-wrap.visible { display: block; }
+  .report-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .report-title { font-size: 12px; letter-spacing: 0.15em; color: var(--text-bright); }
+  .report-hint { font-size: 10px; color: var(--pending); margin-bottom: 10px; line-height: 1.5; }
+  .report-box {
+    width: 100%; background: #050608; border: 1px solid var(--border); border-radius: 6px;
+    color: #cfe3d8; font-family: var(--mono); font-size: 11px; line-height: 1.5;
+    padding: 14px; white-space: pre-wrap; word-break: break-word; resize: vertical;
+    min-height: 220px;
+  }
+  .copy-flash { color: var(--ok) !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="game-title">⚙ MOCHIGO ENGINE</div>
+  <div class="diag-title">Boot Diagnostics — Monorepo</div>
+  <div class="timestamp" id="ts"></div>
+</header>
+<div class="divider"></div>
+
+<div class="summary-bar">
+  <div class="summary-chip chip-ok"><span class="chip-num" id="cntOk">0</span><span>OK</span></div>
+  <div class="summary-chip chip-err"><span class="chip-num" id="cntErr">0</span><span>Error</span></div>
+  <div class="summary-chip chip-warn"><span class="chip-num" id="cntWarn">0</span><span>Aviso</span></div>
+  <div class="summary-chip chip-pending"><span class="chip-num" id="cntPending">0</span><span>Pendiente</span></div>
+  <div class="summary-chip chip-total"><span class="chip-num" id="cntTotal">0</span><span>Total</span></div>
+</div>
+
+<div class="progress-wrap">
+  <div class="progress-label">
+    <span id="progressLabel">Iniciando diagnóstico…</span>
+    <span id="progressPct">0%</span>
+  </div>
+  <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+</div>
+
+<div class="status-line" id="statusLine"><span class="running-indicator"></span>Cargando paquetes…</div>
+<div class="sections" id="sections"></div>
+
+<div class="btn-row">
+  <button class="btn btn-primary" onclick="runDiag()">↺ Re-ejecutar</button>
+  <button class="btn btn-secondary" onclick="exportLog()">⬇ Exportar .txt</button>
+  <button class="btn btn-secondary" onclick="toggleAll()">⊞ Expandir / Colapsar</button>
+</div>
+
+<div class="report-wrap" id="reportWrap">
+  <div class="report-header">
+    <div class="report-title">📋 Reporte para pegar en el chat</div>
+    <button class="btn btn-primary" id="copyBtn" onclick="copyReport()">Copiar reporte</button>
+  </div>
+  <div class="report-hint">Copiá este bloque completo y pegalo en el chat con Claude. Tiene todo lo que necesita para diagnosticar sin volver a pedirte los archivos.</div>
+  <textarea class="report-box" id="reportBox" readonly></textarea>
+</div>
+
+<script type="module">
+// ─────────────────────────────────────────────────────────────
+// MANIFEST — cada paquete de MochiGo Engine declara:
+//   path: ruta al entry point compilado real (dist/index.js), tal como
+//         lo consume cualquier otro paquete o el Editor en producción
+//   exp:  export principal esperado (string) o array de exports
+//   needs: (opcional) métodos puntuales que OTROS paquetes ya asumen
+//          que existen — sirve para detectar API rota entre paquetes
+//          que dependen unos de otros (ej: Physics asume rectsIntersect
+//          de math, Renderer asume getTexture de assets)
+// Ajustá los paths si tu estructura de dist difiere.
+// ─────────────────────────────────────────────────────────────
+const MANIFEST = [
+  {
+    id: 'math', icon: '📐', label: '@mochigo/math',
+    files: [
+      {
+        path: '../packages/math/dist/index.js',
+        exp: ['Vector2', 'Rect', 'rectsIntersect'],
+        needs: [
+          { onClass: 'Vector2', method: 'add' },
+          { onClass: 'Vector2', method: 'normalize' },
+          { onClass: 'Rect', method: 'intersects' },
+        ]
+      },
+    ]
+  },
+  {
+    id: 'ecs', icon: '🧩', label: '@mochigo/ecs',
+    files: [
+      {
+        path: '../packages/ecs/dist/index.js',
+        exp: ['World', 'Transform'],
+        needs: [
+          { onClass: 'World', method: 'createEntity' },
+          { onClass: 'World', method: 'addComponent' },
+          { onClass: 'World', method: 'query' },
+          { onClass: 'World', method: 'addSystem' },
+        ]
+      },
+    ]
+  },
+  {
+    id: 'events', icon: '📡', label: '@mochigo/events',
+    files: [
+      {
+        path: '../packages/events/dist/index.js',
+        exp: ['EventBus'],
+        needs: [
+          { onClass: 'EventBus', method: 'on' },
+          { onClass: 'EventBus', method: 'emit' },
+          { onClass: 'EventBus', method: 'once' },
+        ]
+      },
+    ]
+  },
+  {
+    id: 'renderer', icon: '🖼️', label: '@mochigo/renderer',
+    files: [
+      { path: '../packages/renderer/dist/index.js', exp: ['Renderer', 'Sprite', 'Camera'] },
+    ]
+  },
+  {
+    id: 'animation', icon: '🎞️', label: '@mochigo/animation',
+    files: [
+      {
+        path: '../packages/animation/dist/index.js',
+        exp: ['Animator', 'AnimationSystem'],
+        needs: [{ onClass: 'AnimationSystem', method: 'update' }]
+      },
+    ]
+  },
+  {
+    id: 'physics', icon: '💥', label: '@mochigo/physics',
+    files: [
+      {
+        path: '../packages/physics/dist/index.js',
+        exp: ['RigidBody', 'Collider', 'PhysicsSystem'],
+        needs: [{ onClass: 'PhysicsSystem', method: 'update' }]
+      },
+    ]
+  },
+  {
+    id: 'input', icon: '🕹️', label: '@mochigo/input',
+    files: [
+      { path: '../packages/input/dist/index.js', exp: ['InputManager', 'VirtualJoystick'] },
+    ]
+  },
+  {
+    id: 'scenes', icon: '🎬', label: '@mochigo/scenes',
+    files: [
+      {
+        path: '../packages/scenes/dist/index.js',
+        exp: ['SceneManager'],
+        needs: [
+          { onClass: 'SceneManager', method: 'loadScene' },
+          { onClass: 'SceneManager', method: 'unloadCurrentScene' },
+          { onClass: 'SceneManager', method: 'serializeCurrentScene' },
+          { onClass: 'SceneManager', method: 'registerComponent' },
+        ]
+      },
+    ]
+  },
+  {
+    id: 'assets', icon: '🗂️', label: '@mochigo/assets',
+    files: [
+      {
+        path: '../packages/assets/dist/index.js',
+        exp: ['AssetManager'],
+        needs: [
+          { onClass: 'AssetManager', method: 'getTexture' },
+          { onClass: 'AssetManager', method: 'loadManifest' },
+        ]
+      },
+    ]
+  },
+  {
+    id: 'sound', icon: '🔊', label: '@mochigo/sound',
+    files: [
+      { path: '../packages/sound/dist/index.js', exp: ['SoundManager'] },
+    ]
+  },
+  {
+    id: 'scripting', icon: '📜', label: '@mochigo/scripting',
+    files: [
+      {
+        path: '../packages/scripting/dist/index.js',
+        exp: ['ScriptComponent', 'ScriptingSystem'],
+        needs: [{ onClass: 'ScriptingSystem', method: 'update' }]
+      },
+    ]
+  },
+  {
+    id: 'storage', icon: '💾', label: '@mochigo/storage',
+    files: [
+      {
+        path: '../packages/storage/dist/index.js',
+        exp: ['Storage'],
+        needs: [
+          { onClass: 'Storage', method: 'save' },
+          { onClass: 'Storage', method: 'load' },
+          { onClass: 'Storage', method: 'clear' },
+        ]
+      },
+    ]
+  },
+  {
+    id: 'editor', icon: '🛠️', label: '@mochigo/editor',
+    files: [
+      { path: '../packages/editor/dist/index.js', exp: ['EditorApp'] },
+    ]
+  },
+  {
+    id: 'pendiente', icon: '🚧', label: 'Pendiente conocido — no chequeado',
+    files: [
+      { path: 'AssetManager — métodos de escritura al caché (loadManifest real, unload, registerLoadedAsset)', exp: 'Bloquea Importar textura/sonido/JSON/atlas en el Editor', pending: true },
+      { path: 'SceneManager — vaciar World (Nueva escena) y cargar JSON desde disco (Abrir escena)', exp: 'Handlers de topbar sin conectar', pending: true },
+      { path: 'Transform — orden entre hermanos (Mover arriba/abajo)', exp: 'No hay campo de orden, deshabilitado a propósito', pending: true },
+      { path: 'apps/playground — smoke test end-to-end (cargar escena real de punta a punta)', exp: 'No existe todavía ningún paquete lo prueba', pending: true },
+    ]
+  },
+];
+
+let results = [];
+let allExpanded = true;
+
+function ts() {
+  return new Date().toLocaleString('es-ES', { hour12: false });
+}
+
+document.getElementById('ts').textContent = 'Ejecutado: ' + ts();
+
+async function tryImport(path) {
+  try {
+    const mod = await import(path + (path.includes('?') ? '&' : '?') + 't=' + Date.now());
+    return { ok: true, mod };
+  } catch(e) {
+    return { ok: false, error: (e && e.message) ? e.message : String(e) };
+  }
+}
+
+function checkNeeds(mod, fileDef) {
+  if (!fileDef.needs) return [];
+  const problems = [];
+  for (const need of fileDef.needs) {
+    const target = mod[need.onClass];
+    if (!target) {
+      problems.push(`No se encontró '${need.onClass}' en el módulo para verificar el método '${need.method}'.`);
+      continue;
+    }
+    const proto = target.prototype || target;
+    const hasMethod = typeof proto[need.method] === 'function';
+    if (!hasMethod) {
+      problems.push(`'${need.onClass}.${need.method}()' no existe o no es una función. Esto puede romper la integración con otros paquetes que lo llaman.`);
+    }
+  }
+  return problems;
+}
+
+function renderSection(sec, secResults) {
+  const ok    = secResults.filter(r => r.status === 'ok').length;
+  const err   = secResults.filter(r => r.status === 'error').length;
+  const warn  = secResults.filter(r => r.status === 'warn').length;
+  const pend  = secResults.filter(r => r.status === 'pending').length;
+
+  const div = document.createElement('div');
+  div.className = 'section';
+  div.id = 'sec-' + sec.id;
+
+  const statsHtml = [
+    ok   ? `<span class="stat-ok">✓${ok}</span>`        : '',
+    err  ? `<span class="stat-err">✗${err}</span>`      : '',
+    warn ? `<span class="stat-warn">△${warn}</span>`    : '',
+    pend ? `<span class="stat-pending">○${pend}</span>` : '',
+  ].filter(Boolean).join(' ');
+
+  div.innerHTML = `
+    <div class="section-header" onclick="toggleSection('${sec.id}')">
+      <span class="section-title"><span class="section-icon">${sec.icon}</span>${sec.label}</span>
+      <span style="display:flex;align-items:center">
+        <span class="section-stats">${statsHtml}</span>
+        <span class="chevron">▾</span>
+      </span>
+    </div>
+    <div class="file-list" id="fl-${sec.id}"></div>
+  `;
+
+  document.getElementById('sections').appendChild(div);
+
+  const fl = document.getElementById('fl-' + sec.id);
+  secResults.forEach((r, i) => {
+    const row = document.createElement('div');
+    const cls = r.status === 'ok' ? 'row-ok'
+              : r.status === 'error' ? 'row-err'
+              : r.status === 'warn' ? 'row-warn'
+              : 'row-pending';
+    const icon = r.status === 'ok' ? '✓'
+               : r.status === 'error' ? '✗'
+               : r.status === 'warn' ? '△'
+               : '○';
+    const expLabel = r.status === 'pending' ? 'PENDIENTE'
+                    : Array.isArray(r.exp) ? r.exp.join(', ')
+                    : r.exp;
+    row.className = `file-row ${cls}`;
+    row.style.animationDelay = (i * 30) + 'ms';
+    row.innerHTML = `
+      <span class="status-icon">${icon}</span>
+      <span class="file-path">${r.path}</span>
+      <span class="file-export">${expLabel}</span>
+    `;
+    fl.appendChild(row);
+    if (r.status === 'error' && r.error) {
+      const em = document.createElement('div');
+      em.className = 'error-msg';
+      em.textContent = '↳ ' + r.error;
+      fl.appendChild(em);
+    }
+    if (r.warnings && r.warnings.length) {
+      r.warnings.forEach(w => {
+        const wm = document.createElement('div');
+        wm.className = 'warn-msg';
+        wm.textContent = '↳ ' + w;
+        fl.appendChild(wm);
+      });
+    }
+  });
+}
+
+function updateSummary() {
+  const ok    = results.filter(r => r.status === 'ok').length;
+  const err   = results.filter(r => r.status === 'error').length;
+  const warn  = results.filter(r => r.status === 'warn').length;
+  const pend  = results.filter(r => r.status === 'pending').length;
+  const total = results.length;
+  document.getElementById('cntOk').textContent      = ok;
+  document.getElementById('cntErr').textContent      = err;
+  document.getElementById('cntWarn').textContent     = warn;
+  document.getElementById('cntPending').textContent  = pend;
+  document.getElementById('cntTotal').textContent    = total;
+  const loadable = total - pend;
+  const pct = loadable > 0 ? Math.round((ok / loadable) * 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressPct').textContent  = pct + '%';
+  document.getElementById('progressLabel').textContent =
+    (err === 0 && warn === 0)
+      ? `${ok} paquetes OK, ${pend} pendientes`
+      : `${ok} OK · ${err} error(es) · ${warn} aviso(s) · ${pend} pendientes`;
+}
+
+async function runDiag() {
+  results = [];
+  document.getElementById('sections').innerHTML      = '';
+  document.getElementById('cntOk').textContent       = 0;
+  document.getElementById('cntErr').textContent      = 0;
+  document.getElementById('cntWarn').textContent     = 0;
+  document.getElementById('cntPending').textContent  = 0;
+  document.getElementById('cntTotal').textContent    = 0;
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('progressPct').textContent  = '0%';
+  document.getElementById('progressLabel').textContent = 'Iniciando…';
+  document.getElementById('statusLine').innerHTML    = '<span class="running-indicator"></span>Ejecutando diagnóstico…';
+  document.getElementById('ts').textContent          = 'Ejecutado: ' + ts();
+  document.getElementById('reportWrap').classList.remove('visible');
+
+  for (const sec of MANIFEST) {
+    const secResults = [];
+    for (const f of sec.files) {
+      let r;
+      if (f.pending) {
+        r = { path: f.path, exp: f.exp, status: 'pending', sectionLabel: sec.label };
+      } else {
+        document.getElementById('statusLine').innerHTML =
+          `<span class="running-indicator"></span>Cargando <span style="color:var(--accent2)">${f.path}</span>`;
+        const res = await tryImport(f.path);
+        if (res.ok) {
+          const expList = Array.isArray(f.exp) ? f.exp : [f.exp];
+          const missing = expList.filter(e => !(e in res.mod));
+          const needProblems = missing.length === 0 ? checkNeeds(res.mod, f) : [];
+          let status = 'ok';
+          let error = null;
+          if (missing.length > 0) {
+            status = 'error';
+            error = `Export(s) no encontrado(s): ${missing.join(', ')}. Exports reales: ${Object.keys(res.mod).join(', ') || 'ninguno'}`;
+          } else if (needProblems.length > 0) {
+            status = 'warn';
+          }
+          r = { path: f.path, exp: f.exp, status, error, warnings: needProblems, sectionLabel: sec.label };
+        } else {
+          r = { path: f.path, exp: f.exp, status: 'error', error: res.error, sectionLabel: sec.label };
+        }
+      }
+      results.push(r);
+      secResults.push(r);
+      updateSummary();
+    }
+    renderSection(sec, secResults);
+  }
+
+  const errCount  = results.filter(r => r.status === 'error').length;
+  const warnCount = results.filter(r => r.status === 'warn').length;
+  document.getElementById('statusLine').innerHTML =
+    (errCount === 0 && warnCount === 0)
+      ? '✓ Diagnóstico completado — Sin errores ni avisos'
+      : `<span style="color:var(--err)">${errCount ? errCount + ' error(es)' : ''}</span> ${errCount && warnCount ? '·' : ''} <span style="color:var(--accent)">${warnCount ? warnCount + ' aviso(s)' : ''}</span>`;
+
+  buildReport();
+  document.getElementById('reportWrap').classList.add('visible');
+}
+
+function toggleSection(id) {
+  document.getElementById('sec-' + id)?.classList.toggle('collapsed');
+}
+window.toggleSection = toggleSection;
+
+window.toggleAll = function() {
+  allExpanded = !allExpanded;
+  MANIFEST.forEach(s => {
+    const el = document.getElementById('sec-' + s.id);
+    if (!el) return;
+    allExpanded ? el.classList.remove('collapsed') : el.classList.add('collapsed');
+  });
+};
+
+function buildReport() {
+  const ok    = results.filter(r => r.status === 'ok');
+  const err   = results.filter(r => r.status === 'error');
+  const warn  = results.filter(r => r.status === 'warn');
+  const pend  = results.filter(r => r.status === 'pending');
+
+  const lines = [];
+  lines.push('=== MOCHIGO ENGINE — REPORTE DE DIAGNÓSTICO ===');
+  lines.push(`Fecha: ${ts()}`);
+  lines.push(`Resumen: ${ok.length} OK · ${err.length} errores · ${warn.length} avisos · ${pend.length} pendientes · ${results.length} total`);
+  lines.push('');
+
+  if (err.length > 0) {
+    lines.push('--- ERRORES (rompen el import de un paquete) ---');
+    err.forEach(r => {
+      lines.push(`✗ [${r.sectionLabel}] ${r.path}`);
+      lines.push(`   Esperado: ${Array.isArray(r.exp) ? r.exp.join(', ') : r.exp}`);
+      lines.push(`   Problema: ${r.error}`);
+    });
+    lines.push('');
+  }
+
+  if (warn.length > 0) {
+    lines.push('--- AVISOS (cargan bien, pero algo no cuadra) ---');
+    warn.forEach(r => {
+      lines.push(`△ [${r.sectionLabel}] ${r.path}`);
+      (r.warnings || []).forEach(w => lines.push(`   ${w}`));
+    });
+    lines.push('');
+  }
+
+  if (pend.length > 0) {
+    lines.push('--- PENDIENTES CONOCIDOS (no chequeados, ya sabidos) ---');
+    pend.forEach(r => lines.push(`○ ${r.path} — ${r.exp}`));
+    lines.push('');
+  }
+
+  lines.push('--- PAQUETES OK (para referencia rápida) ---');
+  lines.push(ok.map(r => r.path).join(', '));
+  lines.push('');
+  lines.push('=== FIN DEL REPORTE ===');
+  lines.push('');
+  lines.push('Pegá este reporte tal cual en el chat con Claude. Ya tiene todo el contexto de MochiGo Engine (arquitectura ECS, los 14 paquetes, decisiones ya tomadas) de conversaciones anteriores, así que puede interpretar directamente qué significa cada error o aviso sin que le reenvíes los archivos de nuevo — salvo que él mismo te pida ver alguno puntual para corregirlo.');
+
+  document.getElementById('reportBox').value = lines.join('\n');
+}
+
+window.copyReport = function() {
+  const box = document.getElementById('reportBox');
+  box.select();
+  box.setSelectionRange(0, 999999);
+  navigator.clipboard.writeText(box.value).then(() => {
+    const btn = document.getElementById('copyBtn');
+    const original = btn.textContent;
+    btn.textContent = '✓ Copiado';
+    btn.classList.add('copy-flash');
+    setTimeout(() => {
+      btn.textContent = original;
+      btn.classList.remove('copy-flash');
+    }, 1500);
+  }).catch(() => {
+    document.execCommand('copy');
+  });
+};
+
+window.exportLog = function() {
+  const blob = new Blob([document.getElementById('reportBox').value || 'Ejecutá el diagnóstico primero.'], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'mochigo-boot-diag-' + Date.now() + '.txt';
+  a.click();
+};
+
+window.runDiag = runDiag;
+runDiag();
+</script>
+</body>
+</html>
