@@ -135,21 +135,21 @@
 <script type="module">
 // ─────────────────────────────────────────────────────────────
 // MANIFEST — cada paquete de MochiGo Engine declara:
-//   path: ruta al entry point compilado real (dist/index.js), tal como
-//         lo consume cualquier otro paquete o el Editor en producción
+//   path: ruta al entry point compilado real (dist/index.js), relativa
+//         a esta página (diagnostico.html vive en la RAÍZ del repo,
+//         junto a packages/, src/, docs/, etc. — por eso NO lleva '../')
 //   exp:  export principal esperado (string) o array de exports
 //   needs: (opcional) métodos puntuales que OTROS paquetes ya asumen
 //          que existen — sirve para detectar API rota entre paquetes
 //          que dependen unos de otros (ej: Physics asume rectsIntersect
 //          de math, Renderer asume getTexture de assets)
-// Ajustá los paths si tu estructura de dist difiere.
 // ─────────────────────────────────────────────────────────────
 const MANIFEST = [
   {
     id: 'math', icon: '📐', label: '@mochigo/math',
     files: [
       {
-        path: '../packages/math/dist/index.js',
+        path: './packages/math/dist/index.js',
         exp: ['Vector2', 'Rect', 'rectsIntersect'],
         needs: [
           { onClass: 'Vector2', method: 'add' },
@@ -163,7 +163,7 @@ const MANIFEST = [
     id: 'ecs', icon: '🧩', label: '@mochigo/ecs',
     files: [
       {
-        path: '../packages/ecs/dist/index.js',
+        path: './packages/ecs/dist/index.js',
         exp: ['World', 'Transform'],
         needs: [
           { onClass: 'World', method: 'createEntity' },
@@ -178,7 +178,7 @@ const MANIFEST = [
     id: 'events', icon: '📡', label: '@mochigo/events',
     files: [
       {
-        path: '../packages/events/dist/index.js',
+        path: './packages/events/dist/index.js',
         exp: ['EventBus'],
         needs: [
           { onClass: 'EventBus', method: 'on' },
@@ -191,14 +191,14 @@ const MANIFEST = [
   {
     id: 'renderer', icon: '🖼️', label: '@mochigo/renderer',
     files: [
-      { path: '../packages/renderer/dist/index.js', exp: ['Renderer', 'Sprite', 'Camera'] },
+      { path: './packages/renderer/dist/index.js', exp: ['Renderer', 'Sprite', 'Camera'] },
     ]
   },
   {
     id: 'animation', icon: '🎞️', label: '@mochigo/animation',
     files: [
       {
-        path: '../packages/animation/dist/index.js',
+        path: './packages/animation/dist/index.js',
         exp: ['Animator', 'AnimationSystem'],
         needs: [{ onClass: 'AnimationSystem', method: 'update' }]
       },
@@ -208,7 +208,7 @@ const MANIFEST = [
     id: 'physics', icon: '💥', label: '@mochigo/physics',
     files: [
       {
-        path: '../packages/physics/dist/index.js',
+        path: './packages/physics/dist/index.js',
         exp: ['RigidBody', 'Collider', 'PhysicsSystem'],
         needs: [{ onClass: 'PhysicsSystem', method: 'update' }]
       },
@@ -217,14 +217,14 @@ const MANIFEST = [
   {
     id: 'input', icon: '🕹️', label: '@mochigo/input',
     files: [
-      { path: '../packages/input/dist/index.js', exp: ['InputManager', 'VirtualJoystick'] },
+      { path: './packages/input/dist/index.js', exp: ['InputManager', 'VirtualJoystick'] },
     ]
   },
   {
     id: 'scenes', icon: '🎬', label: '@mochigo/scenes',
     files: [
       {
-        path: '../packages/scenes/dist/index.js',
+        path: './packages/scenes/dist/index.js',
         exp: ['SceneManager'],
         needs: [
           { onClass: 'SceneManager', method: 'loadScene' },
@@ -239,7 +239,7 @@ const MANIFEST = [
     id: 'assets', icon: '🗂️', label: '@mochigo/assets',
     files: [
       {
-        path: '../packages/assets/dist/index.js',
+        path: './packages/assets/dist/index.js',
         exp: ['AssetManager'],
         needs: [
           { onClass: 'AssetManager', method: 'getTexture' },
@@ -251,14 +251,14 @@ const MANIFEST = [
   {
     id: 'sound', icon: '🔊', label: '@mochigo/sound',
     files: [
-      { path: '../packages/sound/dist/index.js', exp: ['SoundManager'] },
+      { path: './packages/sound/dist/index.js', exp: ['SoundManager'] },
     ]
   },
   {
     id: 'scripting', icon: '📜', label: '@mochigo/scripting',
     files: [
       {
-        path: '../packages/scripting/dist/index.js',
+        path: './packages/scripting/dist/index.js',
         exp: ['ScriptComponent', 'ScriptingSystem'],
         needs: [{ onClass: 'ScriptingSystem', method: 'update' }]
       },
@@ -268,7 +268,7 @@ const MANIFEST = [
     id: 'storage', icon: '💾', label: '@mochigo/storage',
     files: [
       {
-        path: '../packages/storage/dist/index.js',
+        path: './packages/storage/dist/index.js',
         exp: ['Storage'],
         needs: [
           { onClass: 'Storage', method: 'save' },
@@ -281,7 +281,7 @@ const MANIFEST = [
   {
     id: 'editor', icon: '🛠️', label: '@mochigo/editor',
     files: [
-      { path: '../packages/editor/dist/index.js', exp: ['EditorApp'] },
+      { path: './packages/editor/dist/index.js', exp: ['EditorApp'] },
     ]
   },
   {
