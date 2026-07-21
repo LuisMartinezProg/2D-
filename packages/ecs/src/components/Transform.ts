@@ -1,6 +1,5 @@
 import { Vector2 } from '@mochigo/math';
-import type { EntityId } from './EntityId';
-
+import type { EntityId } from '../World';
 export class Transform {
   static readonly componentName = 'Transform';
 
